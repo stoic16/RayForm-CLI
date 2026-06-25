@@ -1,6 +1,6 @@
 ---
 name: "睿锋平台CLI"
-description: "睿峰智链汽车配件供应链平台 CLI 管理工具。触发条件：(1)查OE号/关联编号/替换号/原厂零件号 (2)查某个车型的轴承/轮毂轴承/张紧轮/涨紧轮/惰轮/过渡轮 (3)解析工厂编号DAC/DU/RAH (4)数据清洗/OE交叉验证/批量校验关联编号 (5)将验证后的OE号或参数(内径/外径/高/安装位置)写入后台 (6)17vin EPC车型搜索/OE反查/配件目录 (7)泰安联TecDoc搜索 (8)后台产品库搜索/产品详情(关联编号+参数) (9)Excel产品清单读取/图片提取/跨表合并 (10)张紧轮/惰轮报价清单清洗。也覆盖产品/客户/供应商/用户/库存/购物车/采购单/出入库等业务模块的CRUD管理。"
+description: "睿峰智链汽车配件供应链平台 CLI 管理工具。通过命令行与 platform-service REST API 交互，覆盖产品、客户/供应商、用户、库存、购物车、报价、采购单、出入库、价格清单/价格变更审批、对账单等后台业务模块的查询与 CRUD 管理。触发条件：后台产品库搜索/产品详情、价格清单与价格变更审批、报价/采购单/出入库管理、客户/供应商/用户/角色/菜单管理等平台后台运营操作。"
 ---
 
 # cli-anything-platform-service
@@ -62,57 +62,6 @@ Environment variables: `PLATFORM_BASE_URL`, `PLATFORM_TOKEN`, `PLATFORM_MOBILE`,
 | `product-category` | `/api/productCategory` | 产品分类管理 (树形结构, 批量更新) |
 | `payment-term` | `/api/paymentTerm` | 付款条件管理 (CRUD) |
 | `statement` | `/api/statement` | 对账单管理 (查询, 导出) |
-| `data-clean` | `/api/principal` | 数据清洗 (编号解析/多源查询/OE校验/参数回写/Excel处理) |
-
-## Data Clean 命令组 (数据清洗)
-
-### 命令列表
-
-| Command | 说明 |
-|---------|------|
-| `data-clean parse <编号>` | 解析工厂编号 (DAC/DU/RAH) |
-| `data-clean backend-search --keyword <词>` | 后台产品库搜索 (queryType=ENCODE) |
-| `data-clean backend-detail --product-id <ID>` | 产品关联编号和参数详情 |
-| `data-clean taianlian-search --query <编号>` | 泰安联 TecDoc CDP 搜索 |
-| `data-clean epc-query --oe <OE> --keyword <车型>` | 17vin EPC (OE反查/车型搜索/目录) |
-| `data-clean cross-validate --file <Excel>` | OE 关联编号批量交叉验证 (A/B/C) |
-| `data-clean excel-process {read,images,cross-table-merge}` | Excel 处理 |
-| `data-clean num-save --product-id <ID> --num <OE>` | 写入关联编号 (手动验证后, source=3 最高可信) |
-| `data-clean num-batch-save --product-id <ID> --nums "OE列表"` | 批量写入关联编号 |
-| `data-clean param-save --product-id <ID> --name <参数名> --value <值>` | 写入参数 (内径/外径/高/安装位置) |
-| `data-clean quote match --file <客户表>` | 产品报价核心链路：客户编号/车型清单 → 批量报价匹配 → 多sheet Excel (不写回后台) |
-
-### 使用示例
-
-```bash
-# 解析工厂编号
-cli-anything-platform-service --json data-clean parse DAC39720037-2RZ(ABS88)
-
-# 后台搜索
-cli-anything-platform-service --json data-clean backend-search --keyword 39720037
-
-# 查看产品关联编号和参数
-cli-anything-platform-service --json data-clean backend-detail --product-id 007844
-
-# 17vin OE反查
-cli-anything-platform-service --json data-clean epc-query --oe 31110RAAA01
-
-# OE交叉验证
-cli-anything-platform-service data-clean cross-validate --file 产品清单.xlsx --check-structure
-
-# 写入验证后的OE (originalSource=3 手动添加)
-cli-anything-platform-service data-clean num-save --product-id 007844 --num "31110-RAA-A01" --maker-name "17vin EPC"
-
-# 写入参数
-cli-anything-platform-service data-clean param-save --product-id 007844 --name "内径" --value "39mm"
-cli-anything-platform-service data-clean param-save --product-id 007844 --name "安装位置" --value "前轮"
-
-# 产品报价核心链路: 客户编号/车型清单 -> 批量报价匹配 -> 多sheet Excel (不写回后台)
-cli-anything-platform-service data-clean quote match --file 客户清单.xlsx --output 报价结果.xlsx
-
-# 启用三方补查 (未匹配编号查询替换OE/关联编号后二次回查)
-cli-anything-platform-service data-clean quote match --file 客户清单.xlsx --output 报价结果.xlsx --deep
-```
 
 ## Price Approval 命令组 (价格变更审批)
 
@@ -217,37 +166,8 @@ cli-anything-platform-service price-item import --price-list-id PL001 --file 明
 ```
 
 ### 前置依赖
-- `taianlian-search` 需要 Chrome CDP 运行在 127.0.0.1:9250
-- `epc-query` 需要环境变量 `17VIN_USERNAME` / `17VIN_PASSWORD`
-- 后台相关命令 (`backend-*` / `num-*` / `param-*` / `price-*`) 依赖 `~/.cli-anything-platform-service/config.json`
-- `num-save` / `param-save` 写入数据标记为 originalSource=3 (手动添加) — 系统最高可信等级
-
-## OE 与关联编号
-
-### OE（原厂零件号）
-
-OE 号是**主机厂为该零件分配的原始编号**，主机厂是零件的设计者，其 OE 号在行业中识别度最高。**检索时优先选择主机大厂的 OE 数据：**
-
-| 车系 | 优先主机厂 |
-|------|-----------|
-| 日系 | 丰田(Toyota)、本田(Honda)、日产(Nissan)、三菱(Mitsubishi)、马自达(Mazda) |
-| 德系 | 大众/奥迪(VW/Audi)、奔驰(Mercedes-Benz)、宝马(BMW) |
-| 法系 | 标致(Peugeot)、雪铁龙(Citroën) |
-| 韩系 | 现代(Hyundai)、起亚(Kia) |
-| 美系 | 福特(Ford)、通用(GM/Chevrolet) |
-
-多源数据冲突时，优先采信主机大厂的 OE 号。
-
-### 关联编号（替换号/交叉引用号）
-
-关联编号是**给主机厂代工生产配件的厂商**为同一零件分配的编号，用于交叉验证。
-
-| 类型 | 国际大厂 | 国内厂商 |
-|------|---------|---------|
-| 轮毂轴承 | SKF(斯凯孚)、NSK、FAG/INA(舍弗勒)、NTN、Koyo(光洋)、Timken(铁姆肯)、SNR | 冠盛(GSP)、人本(C&U)、万向、长江轴承 |
-| 张紧轮/惰轮 | 盖茨(Gates, GTA系列)、INA(舍弗勒)、Litens | — |
-
-**原则**：OE 是权威来源（主机厂设计），关联编号是验证工具（配件厂生产）。两者交叉确认同一车型时数据可信度最高。
+- 价格与后台相关命令 (`price-*` / `product` / `company` 等) 依赖 `~/.cli-anything-platform-service/config.json` 中的连接配置
+- 价格清单明细 (`price-item update`) 价格修改会自动提交价格变更审批
 
 ## Agent Usage Guidance
 

@@ -13,8 +13,9 @@
 
 ### 安装 CLI
 
+仓库根目录执行：
+
 ```bash
-cd agent-harness
 pip install -e .
 ```
 

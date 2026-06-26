@@ -17,6 +17,10 @@ _HOST_IP_MAP = {
     'rfscm.com': '8.155.164.3',
 }
 
+# 业务信封层「未认证/登录失效」码：网关常以 HTTP 200 + body code 表示 token 失效。
+# 仅纳入确认为登录态失效的码，避免把「权限不足(403)」误判为可重登。
+_AUTH_FAIL_CODES = {401, 402}
+
 
 def _direct_connect_ok(host: str, port: int = 443, timeout: float = 2.0) -> bool:
     """快速探测是否能直连并完成 TLS 握手（不经代理）。
@@ -137,6 +141,17 @@ class PlatformServiceBackend:
                 pass
         return data
 
+    def _relogin_and_retry(self, method: str, path: str, params: Dict,
+                           data: Dict, files: Dict, timeout: int) -> Dict[str, Any]:
+        """Token 失效时用已存凭据重新登录并重试一次（_retry=False 防止二次重登）."""
+        try:
+            self.login()
+        except RuntimeError as login_err:
+            raise RuntimeError(
+                f"认证失败: Token 已过期，自动重新登录失败 — {login_err}")
+        return self._request(method, path, params=params, data=data,
+                             files=files, timeout=timeout, _retry=False)
+
     def _request(self, method: str, path: str, params: Dict = None,
                  data: Dict = None, files: Dict = None,
                  timeout: int = 30, _retry: bool = True) -> Dict[str, Any]:
@@ -198,7 +213,14 @@ class PlatformServiceBackend:
 
             content_type = response.headers.get('Content-Type', '')
             if 'application/json' in content_type:
-                return response.json()
+                body = response.json()
+                # 业务信封层 token 失效：HTTP 200 但 body code 表示未认证。
+                # 网关常以此方式（而非传输层 401）返回过期 token。
+                if (_retry and self.credentials and isinstance(body, dict)
+                        and body.get('code') in _AUTH_FAIL_CODES):
+                    return self._relogin_and_retry(method, path, params,
+                                                   data, files, timeout)
+                return body
             else:
                 return {"code": 200, "msg": "OK", "status": True,
                         "data": {"content_type": content_type,
@@ -216,16 +238,10 @@ class PlatformServiceBackend:
             resp = e.response
             if resp is not None:
                 if resp.status_code == 401:
-                    # 已保存账号密码时自动重新登录并重试一次
+                    # 传输层 401：已保存账号密码时自动重新登录并重试一次
                     if _retry and self.credentials:
-                        try:
-                            self.login()
-                        except RuntimeError as login_err:
-                            raise RuntimeError(
-                                f"认证失败: Token 已过期，自动重新登录失败 — {login_err}")
-                        return self._request(method, path, params=params,
-                                             data=data, files=files,
-                                             timeout=timeout, _retry=False)
+                        return self._relogin_and_retry(method, path, params,
+                                                       data, files, timeout)
                     raise RuntimeError("认证失败: Token 无效或已过期")
                 elif resp.status_code == 403:
                     raise RuntimeError("权限不足")

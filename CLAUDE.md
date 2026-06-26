@@ -7,7 +7,7 @@
 ## 安装与开发
 
 ```bash
-pip install -e ".[data-clean]"
+pip install -e .
 ```
 
 ## 提交规范

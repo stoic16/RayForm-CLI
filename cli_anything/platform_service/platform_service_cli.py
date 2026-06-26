@@ -191,10 +191,7 @@ from .core.product_category import product_category
 from .core.payment_term import payment_term
 from .core.statement import statement
 from .core.config_cmd import config_cmd
-from .core.data_clean import data_clean, register_commands
 
-register_commands(data_clean)
-cli.add_command(data_clean)
 cli.add_command(product)
 cli.add_command(company)
 cli.add_command(user)
@@ -293,7 +290,6 @@ def _build_help_dict() -> dict:
     """构建 REPL help 的命令列表。"""
     return {
         "config": "配置连接参数 (use/set/show/test/clear, 支持 test/prod 环境)",
-        "data-clean": "数据清洗工具 (parse, backend-search, epc-query, taianlian-search, cross-validate, excel-process)",
         "product": "产品管理 (list, get, create, update, delete, on-shelf, off-shelf, sync)",
         "company": "公司管理 (customer/supplier list, get, create, audit, lock, unlock)",
         "user": "用户管理 (list, get, create, update)",

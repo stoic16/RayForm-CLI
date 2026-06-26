@@ -30,12 +30,6 @@ setup(
             "black>=22.0",
             "flake8>=5.0",
         ],
-        "data-clean": [
-            "playwright>=1.40",
-            "openpyxl>=3.0",
-            "pandas>=1.5",
-            "xlrd>=2.0",
-        ],
     },
     python_requires=">=3.10",
     classifiers=[
